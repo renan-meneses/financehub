@@ -28,7 +28,7 @@
 
 ## Phase gates
 
-1. Foundation: execute full build, migrations, native auth/JWT/rate-limit tests; add SMTP worker failure/retry tests and run browser login/workspace smoke.
+1. Foundation: build, migrations, native auth/JWT/rate-limit tests and browser login/workspace smoke passed; add SMTP worker failure/retry tests and complete remaining authorization gates.
 2. Core: ledger rollback, tenant isolation, transfers, pagination and connected UI workflows.
 3. Cards: purchase/refund/payment conservation, concurrent idempotent payments, cash/accrual double-count prevention.
 4. Analytics: JPQL fixture totals, filtered exports, formula injection and chart navigation.
@@ -54,4 +54,8 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The scenario uses synthetic per-run accounts. It has not executed here because npm/browser installation and Docker are blocked. CI now declares the same browser gate after backend/frontend verification. Traces are disabled to avoid capturing token/password payloads. The Mailpit lookup follows its [API contract](https://mailpit.axllent.org/docs/api-v1/).
+Both desktop and mobile Chromium scenarios passed on 2026-10-17 against the local Compose services after rebuilding and restarting the frontend. The mobile run initially failed because the ledger table expanded its grid column beyond the viewport. Setting `min-width: 0` on grid children confines the table to its scroll container; a new page-width assertion reproduced the overflow before the fix and passes afterward, together with the normal Save click. The frontend image build also passed using `npm ci`.
+
+The extended scenario also passed on desktop and mobile Chromium on 2026-10-17 (2 tests, 14.7 seconds). It verifies disabled empty-login submission, Tab focus from email to password to submit, keyboard submission, incorrect-password feedback and recovery, invalid monetary input, server rejection of a future opening date (HTTP 422), preservation of the account draft and successful correction without duplicate visible accounts. These checks exercise real backend responses. Full keyboard accessibility, screen-reader behavior and other error paths remain pending.
+
+The scenario uses synthetic per-run accounts. Hosted CI has not been executed here, but declares the same browser gate after backend/frontend verification. Traces are disabled to avoid capturing token/password payloads. The Mailpit lookup follows its [API contract](https://mailpit.axllent.org/docs/api-v1/).

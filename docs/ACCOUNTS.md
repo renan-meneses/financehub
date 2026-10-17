@@ -1,6 +1,6 @@
 # Financial accounts: first increment
 
-This increment is implemented in source and connected to AngularJS. Its backend integration and browser scenarios have not executed in the agent environment. The user separately confirmed that registration and login work locally.
+This increment is implemented and connected to AngularJS. All seven PostgreSQL account integration tests and the desktop/mobile Chromium registration-to-archive scenarios passed on 2026-10-17. See [testing results](../TESTING.md) for scope and remaining quality gates.
 
 ## Behavior
 

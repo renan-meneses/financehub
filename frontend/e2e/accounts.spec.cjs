@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { randomUUID, randomBytes } = require('node:crypto');
 
-test('register, verify, sign in, open an account, inspect its ledger and archive it', async ({ page, request, baseURL }) => {
+test('recover from invalid login and account data, navigate by keyboard, inspect the ledger and archive', async ({ page, request, baseURL }) => {
   const email = `financehub-${randomUUID()}@example.test`;
   const password = randomBytes(24).toString('base64url');
   const workspaceName = `Synthetic workspace ${randomUUID().slice(0, 8)}`;
@@ -31,9 +31,21 @@ test('register, verify, sign in, open an account, inspect its ledger and archive
   await page.getByRole('button', { name: 'Confirmar e-mail' }).click();
   await expect(page.getByRole('status')).toContainText('E-mail confirmado');
   await page.getByRole('link', { name: 'Voltar ao login' }).click();
+  const signIn = page.getByRole('button', { name: 'Entrar', exact: true });
+  await expect(signIn).toBeDisabled();
   await page.getByLabel('E-mail', { exact: true }).fill(email);
+  await page.getByLabel('E-mail', { exact: true }).press('Tab');
+  await expect(page.getByLabel('Senha', { exact: true })).toBeFocused();
+  await page.keyboard.type('incorrect-synthetic-password');
+  await page.keyboard.press('Tab');
+  await expect(signIn).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('alert')).toContainText('Acesso inválido ou expirado');
+  await expect(page.getByLabel('Senha', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('E-mail', { exact: true })).toHaveValue(email);
+  await expect(signIn).toBeDisabled();
   await page.getByLabel('Senha', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  await page.getByLabel('Senha', { exact: true }).press('Enter');
   await expect(page.getByRole('heading', { name: 'Seus workspaces' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Seus workspaces' })).toBeVisible();
@@ -43,10 +55,28 @@ test('register, verify, sign in, open an account, inspect its ledger and archive
   await expect(page.getByRole('heading', { name: 'Contas financeiras' })).toBeVisible();
   await page.getByLabel('Nome da conta').fill('Synthetic checking account');
   await page.getByLabel('Instituição financeira').fill('Synthetic bank');
+  const createAccount = page.getByRole('button', { name: 'Criar conta', exact: true });
+  await page.getByLabel('Saldo de abertura', { exact: true }).fill('not-a-number');
+  await expect(createAccount).toBeDisabled();
   await page.getByLabel('Saldo de abertura', { exact: true }).fill('1234.56');
-  await page.getByRole('button', { name: 'Criar conta', exact: true }).click();
+  const openingDate = page.getByLabel('Data de abertura', { exact: true });
+  const validDate = await openingDate.inputValue();
+  await openingDate.fill('2999-01-01');
+  const rejectedCreation = page.waitForResponse(response =>
+    new URL(response.url()).pathname === '/api/v1/accounts' && response.request().method() === 'POST'
+  );
+  await createAccount.click();
+  expect((await rejectedCreation).status()).toBe(422);
+  await expect(page.getByRole('alert')).toContainText('Confira a moeda, a precisão do saldo e a data de abertura');
+  await expect(page.locator('.workspace-card')).toHaveCount(0);
+  await expect(page.getByLabel('Nome da conta')).toHaveValue('Synthetic checking account');
+  await expect(page.getByLabel('Saldo de abertura', { exact: true })).toHaveValue('1234.56');
+  await openingDate.fill(validDate);
+  await createAccount.click();
   const account = page.locator('.workspace-card').filter({ hasText: 'Synthetic checking account' });
   await expect(account).toContainText('1.234,56 BRL');
+  await expect(account).toHaveCount(1);
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await account.getByRole('button', { name: 'Histórico' }).click();
   await expect(page.getByRole('table')).toContainText('Saldo de abertura');
   await expect(page.getByRole('table').getByRole('cell', { name: '1.234,56 BRL', exact: true })).toHaveCount(2);

@@ -29,15 +29,17 @@ V3 adds accounts, immutable opening ledger entries and idempotency receipts. End
 | npm installation/build | Passed npm ci and asset build; lockfile generated |
 | npm audit | Two affected packages: one high, one moderate, associated with AngularJS |
 | Docker daemon | Accessible outside sandbox; PostgreSQL Testcontainers passed |
+| Frontend container | Image build and local Compose restart passed using npm ci |
+| Browser E2E | Desktop and mobile Chromium passed against local Compose services, including invalid-login recovery, account validation and login keyboard navigation |
 | Git | Existing repository and staged work readable; no commit created in this continuation |
 
-The initial sandbox restrictions were resolved by approved execution outside the sandbox. The JWT expiration test fixture needed an issuance timestamp before its expiration; the corrected suite passed. CI and the frontend Dockerfile now use the generated lockfile with `npm ci`. A new container image build and hosted CI execution are not claimed.
+The initial sandbox restrictions were resolved by approved execution outside the sandbox. The JWT expiration test fixture needed an issuance timestamp before its expiration; the corrected suite passed. The mobile browser test reproduced ledger-table overflow that blocked Save; grid children now allow shrinking, and both the new overflow assertion and full workflow pass. CI and the frontend Dockerfile now use the generated lockfile with `npm ci`. The frontend image was rebuilt and restarted; the existing backend Compose services were used for browser validation. A new backend image build and hosted CI execution are not claimed.
 
 ## Next execution
 
-1. Complete browser validation and additional error-state/keyboard accessibility checks.
+1. Extend browser coverage beyond the now-tested invalid-login/account validation paths and login keyboard navigation to remaining error states and full keyboard accessibility.
 2. Resolve AngularJS dependency advisories and run backend dependency scanning.
 3. Add SMTP failure/retry tests and complete membership/admin authorization and remaining phase 1 quality gates.
-4. Verify container image builds and hosted CI, then review changes before committing and progressing to categories, income/expenses and transfers.
+4. Verify the backend image build and hosted CI, then review changes before committing and progressing to categories, income/expenses and transfers.
 
 Remaining scope includes remaining financial schemas/workflows, reconciliation/transfers, persisted card/invoice management, analytics, exports, budgets/goals, jobs, Redis behavior, complete dashboard, membership management, administrative provisioning, optional MFA, Kubernetes/Helm, full CI/CD, tracing/monitoring dashboards, synthetic financial data and remaining deployment documentation.
