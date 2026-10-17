@@ -1,6 +1,6 @@
 # FinanceHub
 
-Personal and small-business finance platform under construction. **The foundation and the first accounts increment are in source; the full application is not complete or production-ready.** Backend compilation and PostgreSQL integration tests now pass. See [implementation status](docs/IMPLEMENTATION_STATUS.md) for validation results and remaining gates.
+Personal and small-business finance platform under construction. **The foundation, accounts, bills, categories and financial analysis are in source; the full application is not complete or production-ready.** Backend compilation and PostgreSQL integration tests now pass. See [implementation status](docs/IMPLEMENTATION_STATUS.md) for validation results and remaining gates.
 
 ## Current increment
 
@@ -11,7 +11,8 @@ Personal and small-business finance platform under construction. **The foundatio
 - Workspace creation, paginated listing and membership-scoped lookup, with a Hibernate workspace entity.
 - AngularJS 1.8.3 registration/login/recovery/workspace components connected to those APIs, Portuguese/English/Spanish labels, light/dark themes and a restrictive NGINX CSP.
 - Financial accounts with immutable opening entries, ledger-derived balances, idempotent creation, scoped pagination, metadata editing/archive and a connected AngularJS account page.
-- Exact monetary, installment-allocation and billing-calendar policies. Income/expense, transfer and persisted card workflows remain pending.
+- Categories, accounts payable, immutable payment entries and cash-basis financial analysis by period, category and currency. See [finance workflows](docs/FINANCE.md).
+- Exact monetary, installment-allocation and billing-calendar policies. Income, transfers and persisted card workflows remain pending.
 
 ## Local development
 
@@ -46,7 +47,7 @@ npm test
 npm run build
 ```
 
-Actual results: **79,737 financial assertions**, **3,009 identity assertions**, **29 Maven tests** (including PostgreSQL migrations, identity and accounts), frontend service/formatting tests, JavaScript syntax checks and the production asset build passed. See [implementation status](docs/IMPLEMENTATION_STATUS.md) for browser results and remaining validation.
+Actual results: **79,737 financial assertions**, **3,009 identity assertions**, **36 Maven tests** (including PostgreSQL migrations, identity and accounts), frontend service/formatting tests, JavaScript syntax checks and the production asset build passed. See [implementation status](docs/IMPLEMENTATION_STATUS.md) for browser results and remaining validation.
 
 The frontend lockfile is included; Docker and CI use `npm ci`. The npm audit reports two affected packages (one high, one moderate) associated with AngularJS. This remains a release gate; see [security status](SECURITY.md).
 
@@ -54,6 +55,6 @@ The frontend lockfile is included; Docker and CI use `npm ci`. The npm audit rep
 
 [Architecture](ARCHITECTURE.md) · [API](API.md) · [Authentication](docs/AUTHENTICATION.md) · [Financial rules](FINANCIAL_RULES.md) · [Security](SECURITY.md) · [Testing](TESTING.md)
 
-Income/expenses, transfers, reconciliation, persisted cards/invoices, reports, exports, budgets/goals, financial dashboards, Kubernetes/Helm, production CI/CD, monitoring dashboards and synthetic data remain outstanding.
+Income, recurring/partial expense payments, transfers, reconciliation, persisted cards/invoices, broader reports, exports, budgets/goals, Kubernetes/Helm, production CI/CD, monitoring dashboards and synthetic data remain outstanding.
 
 After rebuilding both app images, select a workspace to open its accounts. See [account contracts and invariants](docs/ACCOUNTS.md). The real-browser scenario can be run with `npm run test:e2e` from `frontend/` after installing Chromium with `npx playwright install chromium` and starting Compose.

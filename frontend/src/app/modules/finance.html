@@ -1,0 +1,81 @@
+<section class="workspace-layout">
+  <header class="page-heading"><div><a ui-sref="workspaces">← {{'workspaces' | t}}</a><span class="eyebrow account-workspace">{{$ctrl.workspace.name}}</span><h1>{{$ctrl.mode | t}}</h1><p>{{('intro_' + $ctrl.mode) | t}}</p></div></header>
+  <nav class="finance-nav" aria-label="{{'financeNavigation' | t}}">
+    <a ui-sref="dashboard({workspaceId:$ctrl.workspace.id})" ui-sref-active="current">{{'dashboard' | t}}</a>
+    <a ui-sref="accounts({workspaceId:$ctrl.workspace.id})">{{'accounts' | t}}</a>
+    <a ui-sref="debts({workspaceId:$ctrl.workspace.id})" ui-sref-active="current">{{'debts' | t}}</a>
+    <a ui-sref="categories({workspaceId:$ctrl.workspace.id})" ui-sref-active="current">{{'categories' | t}}</a>
+  </nav>
+  <p class="notice error" ng-if="$ctrl.error" role="alert">{{$ctrl.error | t}}</p>
+  <button class="quiet-button" ng-if="$ctrl.error" ng-click="$ctrl.load()" ng-disabled="$ctrl.loading">{{'refresh' | t}}</button>
+  <p class="notice success" ng-if="$ctrl.message" role="status">{{$ctrl.message | t}}</p>
+  <p role="status" ng-if="$ctrl.loading">{{'loading' | t}}</p>
+  <div ng-if="$ctrl.mode === 'dashboard'">
+    <form class="finance-period" name="periodForm" ng-submit="$ctrl.load()">
+      <div><label for="period-from">{{'periodFrom' | t}}</label><input id="period-from" class="form-control" ng-model="$ctrl.period.from" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" required></div>
+      <div><label for="period-to">{{'periodTo' | t}}</label><input id="period-to" class="form-control" ng-model="$ctrl.period.to" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" required></div>
+      <button class="btn primary-button" ng-disabled="periodForm.$invalid || $ctrl.loading">{{'analyze' | t}}</button>
+    </form>
+    <p class="analysis-note">{{'analysisBasis' | t}}</p>
+    <div ng-if="$ctrl.analysis && !$ctrl.loading">
+      <div class="empty-state" ng-if="!$ctrl.analysis.totals.length"><h2>{{'noFinanceData' | t}}</h2><a ui-sref="accounts({workspaceId:$ctrl.workspace.id})">{{'createAccount' | t}}</a></div>
+      <section class="currency-analysis" ng-repeat="total in $ctrl.analysis.totals track by total.currency">
+        <h2>{{'financialPosition' | t}} · {{total.currency}}</h2>
+        <dl class="finance-metrics">
+          <div><dt>{{'currentBalance' | t}}</dt><dd>{{total.balance | moneyText:total.currency}}</dd></div>
+          <div><dt>{{'pendingDebts' | t}}</dt><dd>{{total.pending | moneyText:total.currency}}</dd></div>
+          <div><dt>{{'overdueDebts' | t}}</dt><dd>{{total.overdue | moneyText:total.currency}}</dd></div>
+          <div><dt>{{'paidInPeriod' | t}}</dt><dd>{{total.paid | moneyText:total.currency}}</dd></div>
+        </dl>
+        <div class="analysis-insight" ng-class="{'shortfall':total.shortfall}">
+          <h3>{{'afterPending' | t}}: {{total.availableAfterPending | moneyText:total.currency}}</h3>
+          <p>{{(total.shortfall ? 'shortfallHint' : 'coverageHint') | t}}</p>
+          <p>{{'previousPeriod' | t}}: {{total.previousPaid | moneyText:total.currency}}. <span ng-if="total.changePercent !== null">{{'spendingChange' | t}}: {{total.changePercent}}%.</span><span ng-if="total.changePercent === null">{{'noComparison' | t}}</span></p>
+        </div>
+      </section>
+      <div class="analysis-columns" ng-if="$ctrl.analysis.totals.length">
+        <section class="analysis-panel"><h2>{{'spendingCategories' | t}}</h2><p ng-if="!$ctrl.analysis.categories.length">{{'noPaidDebts' | t}}</p>
+          <div class="category-bar" ng-repeat="item in $ctrl.analysis.categories track by item.id + item.currency"><div><strong>{{item.name}}</strong><span>{{item.amount | moneyText:item.currency}} · {{item.sharePercent}}%</span></div><meter min="0" max="100" ng-attr-value="{{item.sharePercent}}" aria-label="{{item.name}} · {{item.currency}}">{{item.sharePercent}}%</meter></div>
+        </section>
+        <section class="analysis-panel"><h2>{{'monthlySpending' | t}}</h2><div class="table-responsive"><table class="ledger-table"><thead><tr><th scope="col">{{'month' | t}}</th><th scope="col">{{'currency' | t}}</th><th scope="col">{{'paidInPeriod' | t}}</th></tr></thead><tbody><tr ng-repeat="item in $ctrl.analysis.months track by item.month + item.currency"><td>{{item.month}}</td><td>{{item.currency}}</td><td>{{item.amount | moneyText:item.currency}}</td></tr></tbody></table></div></section>
+      </div>
+    </div>
+  </div>
+  <div ng-if="$ctrl.mode !== 'dashboard'" class="workspace-columns">
+    <div>
+      <div class="field" ng-if="$ctrl.mode === 'debts'"><label for="debt-filter">{{'accountStatus' | t}}</label><select id="debt-filter" class="form-select" ng-model="$ctrl.status" ng-change="$ctrl.filter()" ng-disabled="$ctrl.loading || $ctrl.saving"><option value="">{{'all' | t}}</option><option value="PENDING">{{'debt_PENDING' | t}}</option><option value="PAID">{{'debt_PAID' | t}}</option><option value="CANCELLED">{{'debt_CANCELLED' | t}}</option></select></div>
+      <div class="empty-state" ng-if="!$ctrl.loading && !$ctrl.items.length && !$ctrl.error"><h2>{{'noEntries' | t}}</h2></div>
+      <div class="debt-list" ng-if="!$ctrl.loading && !$ctrl.error">
+        <article class="workspace-card" ng-repeat="item in $ctrl.items track by item.id">
+          <div ng-if="$ctrl.mode === 'categories'"><span class="workspace-kind">{{(item.status === 'ACTIVE' ? 'active' : 'archived') | t}}</span><h2>{{item.name}}</h2><button class="text-button" ng-if="$ctrl.canWrite" ng-click="$ctrl.edit(item)" ng-disabled="$ctrl.saving">{{'edit' | t}}</button></div>
+          <div ng-if="$ctrl.mode === 'debts'"><span class="workspace-kind">{{('debt_' + item.status) | t}}</span><span class="overdue-label" ng-if="$ctrl.overdue(item)"> · {{'overdue' | t}}</span><h2>{{item.description}}</h2><p>{{item.categoryName}} · {{item.accountName}}</p><strong class="account-balance">{{item.amount | moneyText:item.currency}}</strong><p>{{'dueDate' | t}}: {{item.dueDate}} <span ng-if="item.paidDate">· {{'paidDate' | t}}: {{item.paidDate}}</span></p>
+            <div class="account-actions" ng-if="$ctrl.canWrite && item.status === 'PENDING'"><button class="text-button" ng-click="$ctrl.preparePayment(item)" ng-disabled="$ctrl.saving">{{'registerPayment' | t}}</button><button class="text-button" ng-click="$ctrl.cancelling = item; $ctrl.payment = null" ng-disabled="$ctrl.saving">{{'cancelDebt' | t}}</button></div>
+          </div>
+        </article>
+      </div>
+      <nav class="pagination-row" ng-if="$ctrl.total > $ctrl.size" aria-label="Pagination"><button class="quiet-button" ng-click="$ctrl.move(-1)" ng-disabled="$ctrl.page === 0 || $ctrl.loading || $ctrl.saving">{{'previous' | t}}</button><span>{{$ctrl.page + 1}}</span><button class="quiet-button" ng-click="$ctrl.move(1)" ng-disabled="($ctrl.page + 1) * $ctrl.size >= $ctrl.total || $ctrl.loading || $ctrl.saving">{{'next' | t}}</button></nav>
+    </div>
+    <aside ng-if="$ctrl.canWrite">
+      <section class="create-panel" ng-if="$ctrl.mode === 'categories'"><h2>{{($ctrl.editing ? 'editCategory' : 'createCategory') | t}}</h2>
+        <form name="categoryForm" ng-submit="$ctrl.saveCategory()" novalidate>
+          <div class="field" ng-if="!$ctrl.editing"><label for="category-name">{{'categoryName' | t}}</label><input id="category-name" class="form-control" ng-model="$ctrl.category.name" maxlength="120" required></div>
+          <div ng-if="$ctrl.editing"><div class="field"><label for="category-edit-name">{{'categoryName' | t}}</label><input id="category-edit-name" class="form-control" ng-model="$ctrl.editing.name" maxlength="120" required></div><div class="field"><label for="category-status">{{'accountStatus' | t}}</label><select id="category-status" class="form-select" ng-model="$ctrl.editing.status"><option value="ACTIVE">{{'active' | t}}</option><option value="ARCHIVED">{{'archived' | t}}</option></select></div></div>
+          <button class="btn primary-button" ng-disabled="categoryForm.$invalid || $ctrl.saving">{{'save' | t}}</button><button type="button" class="quiet-button" ng-if="$ctrl.editing" ng-click="$ctrl.editing = null" ng-disabled="$ctrl.saving">{{'cancel' | t}}</button>
+        </form>
+      </section>
+      <section class="create-panel" ng-if="$ctrl.mode === 'debts' && !$ctrl.payment && !$ctrl.cancelling"><h2>{{'createDebt' | t}}</h2>
+        <p ng-if="!$ctrl.loading && (!$ctrl.accounts.length || !$ctrl.categories.length)">{{'debtRequirements' | t}}</p>
+        <form name="debtForm" ng-submit="$ctrl.createDebt()" novalidate>
+          <div class="field"><label for="debt-description">{{'description' | t}}</label><input id="debt-description" class="form-control" ng-model="$ctrl.draft.description" maxlength="240" required></div>
+          <div class="field"><label for="debt-account">{{'accountName' | t}}</label><select id="debt-account" class="form-select" ng-model="$ctrl.draft.accountId" ng-options="item.id as (item.name + ' · ' + item.currency) for item in $ctrl.accounts" required><option value="">{{'select' | t}}</option></select></div>
+          <div class="field"><label for="debt-category">{{'categoryName' | t}}</label><select id="debt-category" class="form-select" ng-model="$ctrl.draft.categoryId" ng-options="item.id as item.name for item in $ctrl.categories" required><option value="">{{'select' | t}}</option></select></div>
+          <div class="field"><label for="debt-amount">{{'amount' | t}}</label><input id="debt-amount" class="form-control" inputmode="decimal" ng-model="$ctrl.draft.amount" pattern="[0-9]{1,19}(\.[0-9]{1,4})?" maxlength="24" aria-describedby="debt-decimal" required><small id="debt-decimal">{{'decimalHint' | t}}</small></div>
+          <div class="field"><label for="debt-due">{{'dueDate' | t}}</label><input id="debt-due" class="form-control" ng-model="$ctrl.draft.dueDate" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" required></div>
+          <button class="btn primary-button" ng-disabled="debtForm.$invalid || $ctrl.saving || $ctrl.loading">{{'createDebt' | t}}</button>
+        </form>
+      </section>
+      <section class="create-panel" ng-if="$ctrl.payment"><h2>{{'registerPayment' | t}}</h2><p>{{$ctrl.payment.debt.description}} · {{$ctrl.payment.debt.amount | moneyText:$ctrl.payment.debt.currency}}</p><p>{{'paymentHint' | t}}</p><form name="paymentForm" ng-submit="$ctrl.pay()" novalidate><div class="field"><label for="payment-date">{{'paidDate' | t}}</label><input id="payment-date" class="form-control" ng-model="$ctrl.payment.paidDate" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" required></div><button class="btn primary-button" ng-disabled="paymentForm.$invalid || $ctrl.saving">{{'confirmPayment' | t}}</button><button class="quiet-button" type="button" ng-click="$ctrl.payment = null" ng-disabled="$ctrl.saving">{{'cancel' | t}}</button></form></section>
+      <section class="create-panel" ng-if="$ctrl.cancelling"><h2>{{'cancelDebt' | t}}</h2><p>{{$ctrl.cancelling.description}}</p><p>{{'cancellationHint' | t}}</p><button class="btn primary-button" ng-click="$ctrl.cancelDebt()" ng-disabled="$ctrl.saving">{{'confirmCancellation' | t}}</button><button class="quiet-button" ng-click="$ctrl.cancelling = null" ng-disabled="$ctrl.saving">{{'backToList' | t}}</button></section>
+    </aside>
+  </div>
+</section>

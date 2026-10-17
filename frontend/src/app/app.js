@@ -20,13 +20,24 @@
           return http.get('/api/v1/workspaces/' + transition.params().workspaceId).then(function (r) { return r.data; });
         }] }
       });
+      ['dashboard', 'debts', 'categories'].forEach(function (mode) {
+        states.state(mode, {
+          url: '/workspaces/:workspaceId/' + mode, component: 'financePage',
+          resolve: {
+            mode: function () { return mode; },
+            workspace: ['$http', '$transition$', function (http, transition) {
+              return http.get('/api/v1/workspaces/' + transition.params().workspaceId).then(function (r) { return r.data; });
+            }]
+          }
+        });
+      });
       http.interceptors.push('AuthInterceptor');
     }])
     .run(['$transitions', '$state', function (transitions, state) {
       transitions.onError({}, function (transition) {
         var error = transition.error();
         if (error && error.detail && error.detail.status === 401) state.go('login');
-        if (error && error.detail && [403, 404].indexOf(error.detail.status) !== -1 && transition.to().name === 'accounts') state.go('workspaces');
+        if (error && error.detail && [403, 404].indexOf(error.detail.status) !== -1 && ['accounts','dashboard','debts','categories'].indexOf(transition.to().name) !== -1) state.go('workspaces');
       });
     }])
     .controller('ShellController', ['I18n', '$document', function (i18n, document) {

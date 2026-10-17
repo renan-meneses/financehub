@@ -1,6 +1,6 @@
 # API contracts
 
-These routes now exist in source. Backend compilation and integration execution are blocked by unavailable Maven/Docker access. Local OpenAPI is enabled by Compose at `/v3/api-docs`; it is denied outside the `local` profile. Swagger UI is subject to the backend's restrictive CSP; use the JSON specification for now.
+These routes now exist in source. Backend compilation and PostgreSQL integration verification pass; see [implementation status](docs/IMPLEMENTATION_STATUS.md). Local OpenAPI is enabled by Compose at `/v3/api-docs`; it is denied outside the `local` profile. Swagger UI is subject to the backend's restrictive CSP; use the JSON specification for now.
 
 ## Authentication
 
@@ -37,8 +37,12 @@ Errors use RFC 9457 Problem Details. Malformed/invalid DTOs return 400; semantic
 
 ## Accounts
 
-`GET/POST /accounts`, `GET/PATCH /accounts/{id}` and `GET /accounts/{id}/ledger` now exist in source. All require `X-Workspace-Id` and a bearer token. Creation additionally requires a UUID `Idempotency-Key`. See [account contracts](docs/ACCOUNTS.md) for DTOs, filters, roles and replay behavior. Integration execution is pending.
+`GET/POST /accounts`, `GET/PATCH /accounts/{id}` and `GET /accounts/{id}/ledger` now exist in source. All require `X-Workspace-Id` and a bearer token. Creation additionally requires a UUID `Idempotency-Key`. See [account contracts](docs/ACCOUNTS.md) for DTOs, filters, roles and replay behavior. Integration tests pass.
+
+## Categories, bills and analysis
+
+`GET/POST /categories`, `PATCH /categories/{id}`, `GET/POST /debts`, payment/cancellation actions and `GET /dashboard` are implemented. See [contracts and calculation rules](docs/FINANCE.md).
 
 ## Pending financial routes
 
-Transactions, transfers, cards, invoices, dashboards, planning, reports and exports are not implemented. Their future tenant contract uses `X-Workspace-Id` validated against current membership, resource queries scoped to that workspace and PostgreSQL-backed idempotency for financial mutations. Workspace creation is a normal non-idempotent POST: retries may create another workspace; the client never automatically retries it.
+Income transactions, transfers, cards, invoices, planning, broader reports and exports are not implemented. Their future tenant contract uses `X-Workspace-Id` validated against current membership, resource queries scoped to that workspace and PostgreSQL-backed idempotency for financial mutations. Workspace creation is a normal non-idempotent POST: retries may create another workspace; the client never automatically retries it.
