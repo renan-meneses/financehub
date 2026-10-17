@@ -13,7 +13,7 @@ flowchart LR
     API --> Metrics[Prometheus and tracing]
 ```
 
-The diagram describes the target. Backend identity/workspace source, SMTP outbox delivery and the AngularJS access/workspace flow now exist. Financial modules and runtime integration validation remain pending.
+The diagram describes the target. Backend identity/workspace source, SMTP outbox delivery, account opening/ledger source and connected AngularJS pages now exist. The user confirmed local identity flow; automated integration and the remaining financial modules are pending.
 
 | Boundary | Responsibility | Published interface |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ erDiagram
     ACCOUNT_LEDGER_ENTRIES ||--o| CREDIT_CARD_PAYMENTS : funds
 ```
 
-V1 contains identity, roles, workspaces, membership, refresh-token and audit tables. V2 adds sessions, one-time challenges, email outbox and rate-limit counters. Financial migrations will add composite tenant foreign keys: `(workspace_id, account_id)` must reference an account in that same workspace, with equivalent constraints for cards, categories and invoices.
+V1 contains identity, roles, workspaces, membership, refresh-token and audit tables. V2 adds sessions, one-time challenges, email outbox and rate-limit counters. V3 adds financial accounts, immutable opening ledger entries and account-creation receipts, with composite tenant/currency foreign keys. Future migrations must apply equivalent ownership constraints to cards, categories and invoices.
 
 ## Repository
 

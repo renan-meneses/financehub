@@ -8,7 +8,11 @@
 
 `BillingCalendar` clamps days to the last date of each month. Opening is the day after the previous closing. Purchases dated on closing belong to that cycle; later purchases belong to the next cycle. Due date is the first configured due-day occurrence strictly after closing, optionally advanced from Saturday/Sunday to Monday. Holidays are not yet modeled. Convert instants to the workspace timezone before selecting a cycle. Future installments use consecutive closing months.
 
-## Required persistence invariants, pending implementation
+## Account persistence increment
+
+Account creation now appends exactly one opening entry, including for zero or negative historical balances, and stores its idempotency response and audit record atomically. Balances are JPQL sums over account ledger entries. Metadata editing and archival never alter ledger entries. See [account rules](docs/ACCOUNTS.md). These persistence operations await integration execution.
+
+## Remaining persistence invariants
 
 - All cash balances derive from immutable signed account-ledger postings, including explicit opening entries. Corrections append reversals, never rewrite settled history.
 - Lock affected accounts/cards/invoices in a stable order before mutations. Monetary state and audit events commit in one PostgreSQL transaction.
@@ -19,4 +23,4 @@
 - Reject currency mismatch, insufficient funds under configured account policy, and invoice overpayment. Recheck these rules under database locks.
 - Goal allocation earmarks funds and does not create an external cash expense.
 
-These invariants are design requirements; only the policy objects described above have been implemented and independently executed.
+These invariants are design requirements; the policy objects have been independently executed; account persistence is implemented in source but has not passed integration execution here.

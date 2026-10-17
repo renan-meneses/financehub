@@ -19,6 +19,7 @@ public class ApiExceptionHandler {
     @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
         org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
         jakarta.validation.ConstraintViolationException.class,
+        org.springframework.web.bind.ServletRequestBindingException.class,
         org.springframework.web.method.annotation.HandlerMethodValidationException.class})
     ProblemDetail malformedRequest(Exception exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid request");

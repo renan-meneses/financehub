@@ -14,12 +14,19 @@
         resolve: { profile: ['Auth', function (auth) { return auth.ensure().then(function () { return auth.profile(); }); }] }
       });
       urls.otherwise('/workspaces');
+      states.state('accounts', {
+        url: '/workspaces/:workspaceId/accounts', component: 'accountPage',
+        resolve: { workspace: ['$http', '$transition$', function (http, transition) {
+          return http.get('/api/v1/workspaces/' + transition.params().workspaceId).then(function (r) { return r.data; });
+        }] }
+      });
       http.interceptors.push('AuthInterceptor');
     }])
     .run(['$transitions', '$state', function (transitions, state) {
       transitions.onError({}, function (transition) {
         var error = transition.error();
         if (error && error.detail && error.detail.status === 401) state.go('login');
+        if (error && error.detail && [403, 404].indexOf(error.detail.status) !== -1 && transition.to().name === 'accounts') state.go('workspaces');
       });
     }])
     .controller('ShellController', ['I18n', '$document', function (i18n, document) {

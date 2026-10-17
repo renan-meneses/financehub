@@ -35,6 +35,10 @@ All authentication routes are rate limited except CSRF bootstrap. Login uses 10 
 
 Errors use RFC 9457 Problem Details. Malformed/invalid DTOs return 400; semantic policy failures return 422. Unknown JSON fields are rejected. Request/response bodies must never be logged on identity endpoints. Registration returns generic 202 rather than exposing whether an address exists. Password reset and verification are single-use actions, not replayable idempotent successes.
 
+## Accounts
+
+`GET/POST /accounts`, `GET/PATCH /accounts/{id}` and `GET /accounts/{id}/ledger` now exist in source. All require `X-Workspace-Id` and a bearer token. Creation additionally requires a UUID `Idempotency-Key`. See [account contracts](docs/ACCOUNTS.md) for DTOs, filters, roles and replay behavior. Integration execution is pending.
+
 ## Pending financial routes
 
-Accounts, transactions, transfers, cards, invoices, dashboards, planning, reports and exports are not implemented. Their future tenant contract uses `X-Workspace-Id` validated against current membership, resource queries scoped to that workspace and PostgreSQL-backed idempotency for financial mutations. Workspace creation is a normal non-idempotent POST: retries may create another workspace; the client never automatically retries it.
+Transactions, transfers, cards, invoices, dashboards, planning, reports and exports are not implemented. Their future tenant contract uses `X-Workspace-Id` validated against current membership, resource queries scoped to that workspace and PostgreSQL-backed idempotency for financial mutations. Workspace creation is a normal non-idempotent POST: retries may create another workspace; the client never automatically retries it.

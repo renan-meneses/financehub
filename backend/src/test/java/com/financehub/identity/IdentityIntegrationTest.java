@@ -21,66 +21,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest(properties={"financehub.mail.enabled=false","spring.profiles.active=test","financehub.auth.secure-cookies=false"})
-@AutoConfigureMockMvc
-@Testcontainers
-class IdentityIntegrationTest {
-    @Container static final PostgreSQLContainer<?> DB=new PostgreSQLContainer<>("postgres:17-alpine");
-    private static final Path KEYS=keys();
-    @DynamicPropertySource static void properties(DynamicPropertyRegistry p) {
-        p.add("spring.datasource.url",DB::getJdbcUrl);
-        p.add("spring.datasource.username",DB::getUsername);
-        p.add("spring.datasource.password",DB::getPassword);
-        p.add("financehub.auth.key-directory",()->KEYS.toString());
-        p.add("financehub.auth.key-id",()->"test");
-        p.add("financehub.auth.issuer",()->"https://test.financehub");
-        p.add("financehub.public-url",()->"https://test.financehub");
-    }
-    @Autowired MockMvc mvc;
-    @Autowired ObjectMapper json;
-    @Autowired JdbcTemplate jdbc;
-    @Autowired org.springframework.security.oauth2.jwt.JwtEncoder encoder;
-    @Autowired org.springframework.security.oauth2.jwt.JwtDecoder decoder;
-    @Autowired com.financehub.identity.infrastructure.AuthRateLimiter limiter;
-    private static Path keys() {
-        try {
-            var path=Files.createTempDirectory("financehub-test-keys-");
-            var generator=KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
-            var pair=generator.generateKeyPair();
-            Files.writeString(path.resolve("test.key"),Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded()));
-            Files.writeString(path.resolve("test.pub"),Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()));
-            path.toFile().deleteOnExit(); path.resolve("test.key").toFile().deleteOnExit(); path.resolve("test.pub").toFile().deleteOnExit();
-            return path;
-        } catch(Exception e) { throw new ExceptionInInitializerError(e); }
-    }
-    private ResultActions postJson(String path,Object body,Cookie... cookies) throws Exception {
-        var csrf=mvc.perform(get("/api/v1/auth/csrf")).andExpect(status().isNoContent()).andReturn().getResponse().getCookie("XSRF-TOKEN");
-        var request=post(path).cookie(csrf).header("X-XSRF-TOKEN",csrf.getValue()).contentType("application/json").content(json.writeValueAsString(body));
-        if(cookies.length>0) request.cookie(cookies);
-        // Distinct transport addresses avoid unrelated tests sharing IP buckets.
-        request.with(r -> {r.setRemoteAddr(UUID.randomUUID().toString()); return r;});
-        return mvc.perform(request);
-    }
-    private String register() throws Exception {
-        String email=UUID.randomUUID()+"@example.com";
-        postJson("/api/v1/auth/register",Map.of("email",email,"password","correct horse battery","displayName","Alice"))
-            .andExpect(status().isAccepted());
-        return email;
-    }
-    private String challenge(String email) {
-        return jdbc.queryForObject("SELECT body FROM email_outbox WHERE recipient=? ORDER BY created_at DESC LIMIT 1",String.class,email)
-            .split("token=")[1].split("\\s")[0];
-    }
-    private Login login(String email) throws Exception {
-        var response=postJson("/api/v1/auth/login",Map.of("email",email,"password","correct horse battery","deviceName","Test browser"))
-            .andExpect(status().isOk()).andReturn().getResponse();
-        return new Login(json.readTree(response.getContentAsString()).get("accessToken").asText(),response.getCookie("FH_REFRESH"));
-    }
-    private Login verifiedUser() throws Exception {
-        var email=register();
-        postJson("/api/v1/auth/verify-email",Map.of("token",challenge(email))).andExpect(status().isNoContent());
-        return login(email);
-    }
+class IdentityIntegrationTest extends com.financehub.support.PostgresIntegrationTestSupport {
     @Test void requiresVerificationAndSingleUseChallenge() throws Exception {
         var email=register();
         postJson("/api/v1/auth/login",Map.of("email",email,"password","correct horse battery","deviceName","Test"))
@@ -178,7 +119,11 @@ class IdentityIntegrationTest {
             var claims=new HashMap<String,Object>(legitimate.getClaims());
             if(invalid.equals("issuer")) claims.put("iss","https://untrusted.example");
             if(invalid.equals("audience")) claims.put("aud",List.of("different-api"));
-            if(invalid.equals("expired")) claims.put("exp",java.time.Instant.now().minusSeconds(120));
+            if(invalid.equals("expired")) {
+                var expiredAt=java.time.Instant.now().minusSeconds(120);
+                claims.put("iat",expiredAt.minusSeconds(300));
+                claims.put("exp",expiredAt);
+            }
             if(invalid.equals("no-expiry")) claims.remove("exp");
             var token=encoder.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(
                 org.springframework.security.oauth2.jwt.JwsHeader.with(org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.RS256).keyId("test").build(),
@@ -207,5 +152,4 @@ class IdentityIntegrationTest {
         }
         fail("Could not observe a rate-limit window without a clock rollover");
     }
-    private record Login(String access,Cookie cookie) {}
 }

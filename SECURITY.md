@@ -1,6 +1,6 @@
 # Security status
 
-Source has been reviewed against reachable identity/workspace paths. **Full compilation, security integration tests and dependency scans have not run**, so this increment is not cleared for deployment.
+Backend compilation and all 29 Maven tests, including identity and account isolation checks, passed on 2026-10-17. The npm dependency audit ran and reports two affected packages (one high, one moderate) associated with AngularJS. Backend dependency scanning and the remaining release gates are still pending; this increment is not cleared for deployment.
 
 ## Implemented controls
 
@@ -17,6 +17,8 @@ Source has been reviewed against reachable identity/workspace paths. **Full comp
 
 ## Operational limitations and release gates
 
+The 2026-10-17 `npm audit --json` reports advisories for `angular@1.8.3` and its dependent `@uirouter/angularjs@1.1.1`, including XSS and regular-expression denial of service. These are dependency findings, not demonstrated application exploits. The audit's suggested router downgrade is a breaking change and does not establish a patched AngularJS dependency; no automatic downgrade was applied. Resolve the framework dependency risk before release.
+
 The email outbox temporarily contains message bodies with secret links. Delete-on-delivery/expiry is implemented; protect the database, backups and SMTP connection. SMTP delivery is at least once: a crash after sending may duplicate a message, while the challenge remains single-use.
 
 NGINX proxy traffic currently shares a backend transport-address rate bucket. Configure a trusted-proxy address policy and ingress rate limiting before a multi-user deployment; never enable unconditional trust in X-Forwarded-For. Email buckets remain per account.
@@ -27,7 +29,7 @@ Audit triggers reject ordinary UPDATE/DELETE. Owner privileges and TRUNCATE stil
 
 JWT public-key rotation is configured through the key directory; see [authentication operations](docs/AUTHENTICATION.md). Production key generation, secrets management, HTTPS enforcement at ingress, administrative provisioning/RBAC, membership administration, MFA, retention policies, monitoring access and vulnerability scans remain pending. Workspace role policies exist, but financial permission enforcement cannot be validated until those features exist.
 
-Prometheus remains denied at the HTTP security layer. OpenAPI JSON is accessible only when explicitly enabled in the local profile. Financial/card controllers are absent, and no raw payment credentials are stored.
+Prometheus remains denied at the HTTP security layer. OpenAPI JSON is accessible only when explicitly enabled in the local profile. Card controllers are absent, and no raw payment credentials are stored. Financial account controllers now enforce membership on every request and financial-write roles on mutations. Account creation, opening entry, idempotency receipt and audit insertion share one PostgreSQL transaction. Composite ledger foreign keys enforce matching workspace/account/currency/precision. Ledger UPDATE, DELETE and TRUNCATE triggers reject ordinary history rewrites; database owners can still disable triggers, so production role separation remains required.
 
 ## References
 

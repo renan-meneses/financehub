@@ -21,7 +21,7 @@
       };
       vm.select = function (item) {
         vm.error = null;
-        http.get('/api/v1/workspaces/' + item.id).then(function (r) { vm.selected = r.data; }).catch(function () { vm.error = 'error'; });
+        state.go('accounts', { workspaceId: item.id });
       };
       vm.move = function (delta) { vm.page += delta; vm.load(); };
       vm.logout = function () {

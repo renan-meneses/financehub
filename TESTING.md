@@ -4,11 +4,11 @@
 
 - `sh scripts/check-domain.sh`: **79,737 financial assertions** and **3,009 identity assertions** passed using Java 21 directly. Financial checks cover exact minor-unit allocation and calendar boundaries. Identity checks cover password byte limits, normalization, SHA-256 known vector, token shape and uniqueness sampling.
 - `cd frontend && npm run lint`: JavaScript syntax and prohibited dynamic-execution patterns passed. This is a small source checker, not a full ESLint ruleset.
-- `cd frontend && node test/auth.test.cjs`: **4 tests passed**, covering shared refresh promises, failure recovery, logout error handling, bearer scoping and no automatic mutation replay. Tests execute the actual Auth/interceptor source with mocked HTTP; they are not browser or backend integration tests.
+- `cd frontend && node test/auth.test.cjs`: **4 authentication tests passed**, covering shared refresh promises, failure recovery, logout error handling, bearer scoping and no automatic mutation replay. Tests execute the actual Auth/interceptor source with mocked HTTP; they are not browser or backend integration tests.
 - Compose configuration validation passed with a temporary database password.
 - Development RSA key generator executed successfully in `/tmp`.
 
-## Written but not executed
+## Backend verification (2026-10-17)
 
 `mvn -B -f backend/pom.xml verify` includes JUnit domain tests, PostgreSQL migration tests and Spring Boot MockMvc identity integration tests. Integration scenarios cover:
 
@@ -22,9 +22,9 @@
 - Signed JWT rejection for incorrect issuer/audience, expired or missing expiration.
 - Rate-limit failures committing their counters.
 
-Maven fails before compilation because Maven Central DNS is unavailable. Docker daemon access is denied. Testcontainers deliberately does not skip these tests when Docker is missing. No passing integration, migration, JUnit or Spring runtime result is claimed.
+`mvn -B -f backend/pom.xml verify` passed: 29 tests, zero failures, errors or skips. This includes three migration tests, seven account integration tests and ten identity integration tests using real PostgreSQL Testcontainers. The expired-JWT fixture now sets issuance before expiration so the encoder can construct the token and the request reaches the rejection assertion. Testcontainers deliberately does not skip tests when Docker is missing.
 
-`npm install` fails resolving registry.npmjs.org. The production asset build, real AngularJS runtime, rendering at mobile/desktop sizes, keyboard accessibility and full registration-to-workspace browser journey remain unverified. Generate and audit a package-lock.json when installation works, then change CI/Docker to npm ci.
+`npm ci --ignore-scripts --no-audit --no-fund`, frontend tests, lint and the production asset build passed. The generated lockfile is used by CI and Docker. `npm audit --json` completed with two affected packages (one high, one moderate) associated with AngularJS; see [security status](SECURITY.md). Full keyboard accessibility and additional error-state coverage remain pending. Maven, npm network access, Docker and Chromium required execution outside the restricted agent sandbox.
 
 ## Phase gates
 
@@ -36,3 +36,22 @@ Maven fails before compilation because Maven Central DNS is unavailable. Docker 
 6. Infrastructure: container smoke, Helm/Kubernetes validation, staging deployment and backup restoration.
 
 CI runs Maven verification separately from image builds. Dockerfiles package applications without attempting Docker-in-Docker Testcontainers execution.
+
+## Accounts increment
+
+`node test/accounts.test.cjs` passed 3 additional tests: idempotency-key reuse after lost responses, isolated workspace headers/requests and exact formatting of large monetary values. No monetary values are converted through JavaScript Number.
+
+`AccountIntegrationTest` adds seven PostgreSQL-backed cases covering opening precision, immutable entries, idempotency/replay/conflicts, concurrent creation, tenant isolation, read-only denial, archive/version behavior, rollback on audit failure, future-date rejection and tenant foreign keys. All seven passed on 2026-10-17.
+
+The shared Spring/Testcontainers fixture closes each test context after its class and suppresses MockMvc request dumps to avoid printing authentication payloads.
+
+`frontend/e2e/accounts.spec.cjs` performs real registration, verification through Mailpit, login, refresh restoration, workspace/account creation, ledger inspection and archival on desktop/mobile Chromium. It does not mock backend calls. Run after Compose starts:
+
+```sh
+cd frontend
+npm ci --ignore-scripts --no-audit --no-fund
+npx playwright install chromium
+npm run test:e2e
+```
+
+The scenario uses synthetic per-run accounts. It has not executed here because npm/browser installation and Docker are blocked. CI now declares the same browser gate after backend/frontend verification. Traces are disabled to avoid capturing token/password payloads. The Mailpit lookup follows its [API contract](https://mailpit.axllent.org/docs/api-v1/).

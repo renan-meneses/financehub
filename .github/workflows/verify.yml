@@ -25,7 +25,43 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: frontend
       - run: npm run lint && npm test && npm run build
         working-directory: frontend
+  browser:
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Generate ephemeral database password
+        run: |
+          python3 - <<'PY'
+          import secrets
+          with open('.env', 'w') as output:
+              output.write('DATABASE_PASSWORD=' + secrets.token_hex(24) + '\n')
+          PY
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: docker compose --project-name financehub-ci up --build -d
+      - name: Wait for application
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8080/actuator/health > /dev/null && curl --fail --silent http://localhost:8081/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+      - run: npm run test:e2e
+        working-directory: frontend
+      - if: failure()
+        run: docker compose --project-name financehub-ci logs --tail=100 backend frontend
+      - if: always()
+        run: docker compose --project-name financehub-ci down --volumes

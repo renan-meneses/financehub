@@ -2,6 +2,7 @@
   "name": "financehub-web",
   "version": "0.1.0",
   "private": true,
-  "scripts": {"build": "node scripts/build.mjs", "test": "node --test", "lint": "node scripts/check.mjs"},
-  "dependencies": {"angular": "1.8.3", "@uirouter/angularjs": "1.1.1", "bootstrap": "5.3.8", "chart.js": "4.5.1"}
+  "scripts": {"build": "node scripts/build.mjs", "test": "node --test test/*.test.cjs", "test:e2e": "playwright test", "lint": "node scripts/check.mjs"},
+  "dependencies": {"angular": "1.8.3", "@uirouter/angularjs": "1.1.1", "bootstrap": "5.3.8", "chart.js": "4.5.1"},
+  "devDependencies": {"@playwright/test": "1.56.1"}
 }
