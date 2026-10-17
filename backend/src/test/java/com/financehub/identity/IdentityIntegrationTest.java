@@ -1,0 +1,211 @@
+package com.financehub.identity;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.Cookie;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.KeyPairGenerator;
+import java.util.*;
+import java.util.concurrent.*;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.*;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.*;
+import static org.assertj.core.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest(properties={"financehub.mail.enabled=false","spring.profiles.active=test","financehub.auth.secure-cookies=false"})
+@AutoConfigureMockMvc
+@Testcontainers
+class IdentityIntegrationTest {
+    @Container static final PostgreSQLContainer<?> DB=new PostgreSQLContainer<>("postgres:17-alpine");
+    private static final Path KEYS=keys();
+    @DynamicPropertySource static void properties(DynamicPropertyRegistry p) {
+        p.add("spring.datasource.url",DB::getJdbcUrl);
+        p.add("spring.datasource.username",DB::getUsername);
+        p.add("spring.datasource.password",DB::getPassword);
+        p.add("financehub.auth.key-directory",()->KEYS.toString());
+        p.add("financehub.auth.key-id",()->"test");
+        p.add("financehub.auth.issuer",()->"https://test.financehub");
+        p.add("financehub.public-url",()->"https://test.financehub");
+    }
+    @Autowired MockMvc mvc;
+    @Autowired ObjectMapper json;
+    @Autowired JdbcTemplate jdbc;
+    @Autowired org.springframework.security.oauth2.jwt.JwtEncoder encoder;
+    @Autowired org.springframework.security.oauth2.jwt.JwtDecoder decoder;
+    @Autowired com.financehub.identity.infrastructure.AuthRateLimiter limiter;
+    private static Path keys() {
+        try {
+            var path=Files.createTempDirectory("financehub-test-keys-");
+            var generator=KeyPairGenerator.getInstance("RSA"); generator.initialize(2048);
+            var pair=generator.generateKeyPair();
+            Files.writeString(path.resolve("test.key"),Base64.getEncoder().encodeToString(pair.getPrivate().getEncoded()));
+            Files.writeString(path.resolve("test.pub"),Base64.getEncoder().encodeToString(pair.getPublic().getEncoded()));
+            path.toFile().deleteOnExit(); path.resolve("test.key").toFile().deleteOnExit(); path.resolve("test.pub").toFile().deleteOnExit();
+            return path;
+        } catch(Exception e) { throw new ExceptionInInitializerError(e); }
+    }
+    private ResultActions postJson(String path,Object body,Cookie... cookies) throws Exception {
+        var csrf=mvc.perform(get("/api/v1/auth/csrf")).andExpect(status().isNoContent()).andReturn().getResponse().getCookie("XSRF-TOKEN");
+        var request=post(path).cookie(csrf).header("X-XSRF-TOKEN",csrf.getValue()).contentType("application/json").content(json.writeValueAsString(body));
+        if(cookies.length>0) request.cookie(cookies);
+        // Distinct transport addresses avoid unrelated tests sharing IP buckets.
+        request.with(r -> {r.setRemoteAddr(UUID.randomUUID().toString()); return r;});
+        return mvc.perform(request);
+    }
+    private String register() throws Exception {
+        String email=UUID.randomUUID()+"@example.com";
+        postJson("/api/v1/auth/register",Map.of("email",email,"password","correct horse battery","displayName","Alice"))
+            .andExpect(status().isAccepted());
+        return email;
+    }
+    private String challenge(String email) {
+        return jdbc.queryForObject("SELECT body FROM email_outbox WHERE recipient=? ORDER BY created_at DESC LIMIT 1",String.class,email)
+            .split("token=")[1].split("\\s")[0];
+    }
+    private Login login(String email) throws Exception {
+        var response=postJson("/api/v1/auth/login",Map.of("email",email,"password","correct horse battery","deviceName","Test browser"))
+            .andExpect(status().isOk()).andReturn().getResponse();
+        return new Login(json.readTree(response.getContentAsString()).get("accessToken").asText(),response.getCookie("FH_REFRESH"));
+    }
+    private Login verifiedUser() throws Exception {
+        var email=register();
+        postJson("/api/v1/auth/verify-email",Map.of("token",challenge(email))).andExpect(status().isNoContent());
+        return login(email);
+    }
+    @Test void requiresVerificationAndSingleUseChallenge() throws Exception {
+        var email=register();
+        postJson("/api/v1/auth/login",Map.of("email",email,"password","correct horse battery","deviceName","Test"))
+            .andExpect(status().isUnauthorized());
+        var token=challenge(email);
+        postJson("/api/v1/auth/verify-email",Map.of("token",token)).andExpect(status().isNoContent());
+        postJson("/api/v1/auth/verify-email",Map.of("token",token)).andExpect(status().isUnauthorized());
+        var session=login(email);
+        assertThat(session.cookie().isHttpOnly()).isTrue();
+        assertThat(session.cookie().getPath()).isEqualTo("/api/v1/auth");
+        mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+session.access()))
+            .andExpect(status().isOk()).andExpect(jsonPath("email").value(email)).andExpect(jsonPath("passwordHash").doesNotExist());
+    }
+    @Test void refreshReuseRevokesDescendantsAndAccessImmediately() throws Exception {
+        var login=verifiedUser();
+        var refreshed=postJson("/api/v1/auth/refresh",Map.of(),login.cookie()).andExpect(status().isOk()).andReturn().getResponse();
+        var newCookie=refreshed.getCookie("FH_REFRESH");
+        var access=json.readTree(refreshed.getContentAsString()).get("accessToken").asText();
+        postJson("/api/v1/auth/refresh",Map.of(),login.cookie()).andExpect(status().isUnauthorized());
+        postJson("/api/v1/auth/refresh",Map.of(),newCookie).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+access)).andExpect(status().isUnauthorized());
+    }
+    @Test void concurrentRefreshAllowsOneRotationAndRevokesFamilyOnReplay() throws Exception {
+        var login=verifiedUser();
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var gate=new CountDownLatch(1);
+            Callable<Integer> refresh=()->{gate.await();return postJson("/api/v1/auth/refresh",Map.of(),login.cookie()).andReturn().getResponse().getStatus();};
+            var first=pool.submit(refresh);var second=pool.submit(refresh);gate.countDown();
+            assertThat(List.of(first.get(15,TimeUnit.SECONDS),second.get(15,TimeUnit.SECONDS))).containsExactlyInAnyOrder(200,401);
+        }
+        mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+login.access())).andExpect(status().isUnauthorized());
+    }
+    @Test void rejectsCsrfAndUnauthenticatedRequests() throws Exception {
+        mvc.perform(post("/api/v1/auth/register").contentType("application/json").content("{}"))
+            .andExpect(status().isForbidden()).andExpect(content().contentTypeCompatibleWith("application/problem+json"));
+        mvc.perform(get("/api/v1/workspaces")).andExpect(status().isUnauthorized());
+    }
+    @Test void isolatesWorkspacesAndRollsBackInvalidCreation() throws Exception {
+        var alice=verifiedUser();var bob=verifiedUser();
+        var response=mvc.perform(post("/api/v1/workspaces").header("Authorization","Bearer "+alice.access()).contentType("application/json")
+            .content(json.writeValueAsString(Map.of("name","Personal","kind","PERSONAL","currency","BRL","timezone","America/Fortaleza"))))
+            .andExpect(status().isCreated()).andReturn().getResponse();
+        String id=json.readTree(response.getContentAsString()).get("id").asText();
+        mvc.perform(get("/api/v1/workspaces/"+id).header("Authorization","Bearer "+bob.access())).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/workspaces").header("Authorization","Bearer "+bob.access()))
+            .andExpect(status().isOk()).andExpect(jsonPath("total").value(0));
+        long before=jdbc.queryForObject("SELECT count(*) FROM workspaces",Long.class);
+        mvc.perform(post("/api/v1/workspaces").header("Authorization","Bearer "+alice.access()).contentType("application/json")
+            .content(json.writeValueAsString(Map.of("name","Invalid","kind","PERSONAL","currency","BRL","timezone","Invalid/Zone"))))
+            .andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM workspaces",Long.class)).isEqualTo(before);
+    }
+    @Test void logoutAndSuspensionInvalidateTokens() throws Exception {
+        var login=verifiedUser();
+        postJson("/api/v1/auth/logout",Map.of(),login.cookie()).andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+login.access())).andExpect(status().isUnauthorized());
+        var second=verifiedUser();
+        var response=mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+second.access())).andReturn().getResponse();
+        jdbc.update("UPDATE users SET suspended_at=now() WHERE id=?",UUID.fromString(json.readTree(response.getContentAsString()).get("id").asText()));
+        mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+second.access())).andExpect(status().isUnauthorized());
+    }
+    @Test void resetRevokesSessionsAndCannotBeReplayed() throws Exception {
+        var email=register();
+        postJson("/api/v1/auth/verify-email",Map.of("token",challenge(email))).andExpect(status().isNoContent());
+        var login=login(email);
+        postJson("/api/v1/auth/forgot-password",Map.of("email",email)).andExpect(status().isAccepted());
+        var reset=challenge(email);
+        postJson("/api/v1/auth/reset-password",Map.of("token",reset,"password","replacement password"))
+            .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+login.access())).andExpect(status().isUnauthorized());
+        postJson("/api/v1/auth/refresh",Map.of(),login.cookie()).andExpect(status().isUnauthorized());
+        postJson("/api/v1/auth/reset-password",Map.of("token",reset,"password","another replacement"))
+            .andExpect(status().isUnauthorized());
+        postJson("/api/v1/auth/login",Map.of("email",email,"password","replacement password","deviceName","Reset browser"))
+            .andExpect(status().isOk());
+    }
+    @Test void preventsStaleProfileUpdatesAndCrossUserRevocation() throws Exception {
+        var alice=verifiedUser(); var bob=verifiedUser();
+        var profile=mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+alice.access())).andReturn().getResponse();
+        long version=json.readTree(profile.getContentAsString()).get("version").asLong();
+        var request=Map.of("displayName","Updated name","version",version);
+        mvc.perform(patch("/api/v1/users/me").header("Authorization","Bearer "+alice.access()).contentType("application/json")
+            .content(json.writeValueAsString(request))).andExpect(status().isOk()).andExpect(jsonPath("displayName").value("Updated name"));
+        mvc.perform(patch("/api/v1/users/me").header("Authorization","Bearer "+alice.access()).contentType("application/json")
+            .content(json.writeValueAsString(request))).andExpect(status().isConflict());
+        var sessions=mvc.perform(get("/api/v1/users/me/sessions").header("Authorization","Bearer "+alice.access())).andReturn().getResponse();
+        String sessionId=json.readTree(sessions.getContentAsString()).get(0).get("id").asText();
+        mvc.perform(delete("/api/v1/users/me/sessions/"+sessionId).header("Authorization","Bearer "+bob.access())).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+alice.access())).andExpect(status().isOk());
+    }
+    @Test void rejectsIncorrectIssuerAudienceExpiredAndMissingExpiry() throws Exception {
+        var login=verifiedUser();
+        var legitimate=decoder.decode(login.access());
+        for(String invalid:List.of("issuer","audience","expired","no-expiry")) {
+            var claims=new HashMap<String,Object>(legitimate.getClaims());
+            if(invalid.equals("issuer")) claims.put("iss","https://untrusted.example");
+            if(invalid.equals("audience")) claims.put("aud",List.of("different-api"));
+            if(invalid.equals("expired")) claims.put("exp",java.time.Instant.now().minusSeconds(120));
+            if(invalid.equals("no-expiry")) claims.remove("exp");
+            var token=encoder.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(
+                org.springframework.security.oauth2.jwt.JwsHeader.with(org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.RS256).keyId("test").build(),
+                org.springframework.security.oauth2.jwt.JwtClaimsSet.builder().claims(values->values.putAll(claims)).build())).getTokenValue();
+            mvc.perform(get("/api/v1/users/me").header("Authorization","Bearer "+token)).andExpect(status().isUnauthorized());
+        }
+    }
+    @Test void rateLimitFailureStillCommitsAttemptCounter() {
+        // A minute rollover legitimately resets the counter; retry the observation in that case.
+        for(int observation=0;observation<3;observation++) {
+            var minute=java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MINUTES);
+            String bucket="test:"+UUID.randomUUID();
+            int rejected=0;
+            for(int attempt=0;attempt<5;attempt++) {
+                try { limiter.check(bucket,3); }
+                catch(com.financehub.shared.exceptions.ApiFailure failure) {
+                    assertThat(failure.status()).isEqualTo(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS);
+                    rejected++;
+                }
+            }
+            if(!minute.equals(java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MINUTES))) continue;
+            assertThat(rejected).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT attempts FROM auth_rate_limits WHERE key_hash=?",Integer.class,
+                com.financehub.identity.domain.IdentityPolicy.hash(bucket))).isEqualTo(5);
+            return;
+        }
+        fail("Could not observe a rate-limit window without a clock rollover");
+    }
+    private record Login(String access,Cookie cookie) {}
+}

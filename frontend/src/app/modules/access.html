@@ -1,0 +1,21 @@
+<section class="access-layout">
+  <div class="access-story"><span class="eyebrow">FINANCEHUB</span><h1>{{'welcome' | t}}</h1><p>{{'intro' | t}}</p><div class="ledger-art" aria-hidden="true"><span>BRL</span><div></div><div></div><div></div></div></div>
+  <div class="access-card">
+    <h2>{{$ctrl.title | t}}</h2>
+    <p class="notice success" role="status" ng-if="$ctrl.message">{{$ctrl.message | t}}</p>
+    <p class="notice error" role="alert" ng-if="$ctrl.error">{{$ctrl.error | t}}</p>
+    <form name="accessForm" ng-submit="$ctrl.submit()" ng-if="!$ctrl.message" novalidate>
+      <div ng-if="$ctrl.mode === 'register'" class="field"><label for="name">{{'name' | t}}</label><input id="name" class="form-control" ng-model="$ctrl.data.displayName" autocomplete="name" maxlength="120" required></div>
+      <div ng-if="$ctrl.mode !== 'verify-email' && $ctrl.mode !== 'reset-password'" class="field"><label for="email">{{'email' | t}}</label><input id="email" class="form-control" type="email" ng-model="$ctrl.data.email" autocomplete="email" maxlength="254" required></div>
+      <div ng-if="$ctrl.mode === 'login' || $ctrl.mode === 'register' || $ctrl.mode === 'reset-password'" class="field">
+        <label for="password">{{'password' | t}}</label><input id="password" class="form-control" type="password" ng-model="$ctrl.data.password" ng-attr-autocomplete="{{$ctrl.mode === 'login' ? 'current-password' : 'new-password'}}" ng-minlength="$ctrl.mode === 'login' ? 1 : 12" maxlength="72" aria-describedby="password-hint" required>
+        <small id="password-hint" ng-if="$ctrl.mode !== 'login'">{{'passwordHint' | t}}</small>
+      </div>
+      <button class="btn primary-button w-100" type="submit" ng-disabled="accessForm.$invalid || $ctrl.busy">{{($ctrl.busy ? 'pending' : $ctrl.mode === 'login' ? 'login' : $ctrl.mode === 'register' ? 'register' : $ctrl.mode === 'verify-email' ? 'verify' : $ctrl.mode === 'reset-password' ? 'reset' : 'send') | t}}</button>
+      <button class="text-button" type="button" ng-if="$ctrl.mode === 'login' && $ctrl.error" ng-click="$ctrl.resend()" ng-disabled="$ctrl.busy || !accessForm.$valid">{{'resend' | t}}</button>
+    </form>
+    <nav class="access-links" aria-label="Account">
+      <a ui-sref="register" ng-if="$ctrl.mode === 'login'">{{'register' | t}}</a><a ui-sref="forgot-password" ng-if="$ctrl.mode === 'login'">{{'forgot' | t}}</a><a ui-sref="login" ng-if="$ctrl.mode !== 'login'">{{'back' | t}}</a>
+    </nav>
+  </div>
+</section>

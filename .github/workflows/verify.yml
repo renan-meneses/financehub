@@ -1,0 +1,31 @@
+name: Foundation verification
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - run: sh scripts/check-domain.sh
+      - run: mvn -B -f backend/pom.xml verify
+      - run: docker compose config --quiet
+        env:
+          DATABASE_PASSWORD: ci-placeholder-not-a-production-secret
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: frontend
+      - run: npm run lint && npm test && npm run build
+        working-directory: frontend

@@ -1,0 +1,17 @@
+<section class="workspace-layout">
+  <header class="page-heading"><div><span class="eyebrow">{{$ctrl.profile.displayName}}</span><h1>{{'workspaces' | t}}</h1><p>{{'workspaceIntro' | t}}</p></div><button type="button" class="quiet-button" ng-click="$ctrl.logout()">{{'logout' | t}}</button></header>
+  <p class="notice error" ng-if="$ctrl.error" role="alert">{{$ctrl.error | t}}</p>
+  <div class="workspace-columns"><div>
+    <p role="status" ng-if="$ctrl.loading">{{'loading' | t}}</p>
+    <div class="empty-state" ng-if="!$ctrl.loading && !$ctrl.items.length && !$ctrl.error"><h2>{{'empty' | t}}</h2><p>{{'emptyHint' | t}}</p></div>
+    <div class="workspace-grid" ng-if="!$ctrl.loading"><article class="workspace-card" ng-repeat="item in $ctrl.items track by item.id" ng-class="{selected: $ctrl.selected.id === item.id}"><span class="workspace-kind">{{(item.kind === 'PERSONAL' ? 'personal' : 'business') | t}}</span><h2>{{item.name}}</h2><p>{{item.currency}} · {{item.timezone}}</p><button type="button" class="text-button" ng-click="$ctrl.select(item)" ng-attr-aria-pressed="{{$ctrl.selected.id === item.id}}">{{($ctrl.selected.id === item.id ? 'selected' : 'select') | t}}</button></article></div>
+    <nav class="pagination-row" aria-label="Pagination" ng-if="$ctrl.total > $ctrl.size"><button class="quiet-button" ng-click="$ctrl.move(-1)" ng-disabled="$ctrl.page === 0 || $ctrl.loading">{{'previous' | t}}</button><span>{{$ctrl.page + 1}}</span><button class="quiet-button" ng-click="$ctrl.move(1)" ng-disabled="($ctrl.page + 1) * $ctrl.size >= $ctrl.total || $ctrl.loading">{{'next' | t}}</button></nav>
+    <div class="selection-note" ng-if="$ctrl.selected" role="status"><strong>{{'workspaceSelected' | t}}: {{$ctrl.selected.name}}</strong><p>{{'foundation' | t}}</p></div>
+  </div><aside class="create-panel"><h2>{{'createWorkspace' | t}}</h2><form name="workspaceForm" ng-submit="$ctrl.create()" novalidate>
+    <div class="field"><label for="workspace-name">{{'workspaceName' | t}}</label><input id="workspace-name" class="form-control" ng-model="$ctrl.draft.name" maxlength="120" required></div>
+    <div class="field"><label for="kind">{{'kind' | t}}</label><select id="kind" class="form-select" ng-model="$ctrl.draft.kind"><option value="PERSONAL">{{'personal' | t}}</option><option value="BUSINESS">{{'business' | t}}</option></select></div>
+    <div class="field"><label for="currency">{{'currency' | t}}</label><select id="currency" class="form-select" ng-model="$ctrl.draft.currency"><option>BRL</option><option>USD</option><option>EUR</option></select></div>
+    <div class="field"><label for="timezone">{{'timezone' | t}}</label><input id="timezone" class="form-control" ng-model="$ctrl.draft.timezone" maxlength="64" required></div>
+    <button type="submit" class="btn primary-button w-100" ng-disabled="workspaceForm.$invalid || $ctrl.saving">{{($ctrl.saving ? 'pending' : 'create') | t}}</button>
+  </form></aside></div>
+</section>

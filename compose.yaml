@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: financehub
+      POSTGRES_USER: financehub
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financehub -d financehub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/financehub
+      DATABASE_USER: financehub
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?Set DATABASE_PASSWORD in .env}
+      REDIS_HOST: redis
+      JWT_ISSUER: http://localhost:8081
+      JWT_KEY_DIRECTORY: /keys
+      JWT_KEY_ID: development
+      PUBLIC_URL: http://localhost:8081
+      SECURE_COOKIES: "false"
+      SPRING_PROFILES_ACTIVE: local
+      OPENAPI_ENABLED: "true"
+      SMTP_HOST: mailpit
+      SMTP_TLS: "false"
+    volumes:
+      - development_keys:/keys:ro
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init-keys:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+  init-keys:
+    image: eclipse-temurin:21-jdk-alpine
+    entrypoint: ["java", "/GenerateDevelopmentKeys.java", "/keys"]
+    volumes:
+      - development_keys:/keys
+      - ./scripts/GenerateDevelopmentKeys.java:/GenerateDevelopmentKeys.java:ro
+    network_mode: none
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:8025:8025"
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      - backend
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+volumes:
+  postgres_data:
+  development_keys:

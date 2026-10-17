@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR" ng-app="financehub" ng-csp="no-unsafe-eval;no-inline-style" ng-strict-di>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>FinanceHub</title>
+  <link rel="stylesheet" href="vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="vendor/angular-csp.css">
+  <link rel="stylesheet" href="app/styles/main.css">
+  <script defer src="vendor/angular.min.js"></script>
+  <script defer src="vendor/angular-ui-router.min.js"></script>
+  <script defer src="app/app.js"></script>
+  <script defer src="app/core/api.js"></script>
+  <script defer src="app/core/i18n.js"></script>
+  <script defer src="app/modules/access.js"></script>
+  <script defer src="app/modules/workspaces.js"></script>
+</head>
+<body ng-controller="ShellController as shell" ng-class="{'dark-theme': shell.dark}">
+  <a class="skip-link" href="#main" ng-click="shell.skip($event)">{{'skip' | t}}</a>
+  <header class="topbar">
+    <a class="brand" ui-sref="workspaces"><span class="brand-mark" aria-hidden="true">F</span> FinanceHub</a>
+    <div class="topbar-actions">
+      <label class="visually-hidden" for="language">{{'language' | t}}</label>
+      <select id="language" class="form-select form-select-sm" ng-model="shell.language" ng-change="shell.setLanguage()">
+        <option value="pt-BR">Português</option><option value="en">English</option><option value="es">Español</option>
+      </select>
+      <button type="button" class="quiet-button" ng-click="shell.toggleTheme()" aria-label="{{'theme' | t}}">◐</button>
+    </div>
+  </header>
+  <main id="main" tabindex="-1"><ui-view></ui-view></main>
+  <footer>FinanceHub · {{'footer' | t}}</footer>
+</body>
+</html>
